@@ -64,7 +64,7 @@ export default function VerseList({
     const goNext = () => router.push(`/?view=mushaf&page=${Math.min(TOTAL_PAGES, mushafPageNumber + 1)}`);
     return (
       <>
-        <MushafPage verses={verses} pageNumber={mushafPageNumber} />
+        <MushafPage key={`mushaf-${mushafPageNumber}`} verses={verses} pageNumber={mushafPageNumber} />
         <nav className="page-nav" aria-label="Page navigation">
           <button className="nav-btn" onClick={goPrev} disabled={mushafPageNumber <= 1}>← Previous page</button>
           <span className="counter">Page {mushafPageNumber} / {TOTAL_PAGES}</span>
