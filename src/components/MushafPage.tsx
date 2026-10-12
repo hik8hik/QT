@@ -16,7 +16,9 @@ interface Props {
 
 const TARGET_LINES = 15;
 const MIN_FONT = 8;
-const MAX_FONT = 34;
+const MAX_FONT_HARD = 200;      // absolute safety valve
+const FONT_TO_LINE_RATIO = 0.92; // font can be at most 92% of line-height
+const LINE_TOLERANCE = 0.05;    // allow the last line to be 5% over
 const CARD_ASPECT = 3 / 4.3;
 
 function sanitise(raw: string): string {
@@ -77,12 +79,18 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
           el.style.fontSize = px + "px";
           el.style.lineHeight = targetLH + "px";
           void el.offsetHeight;
-          return Math.ceil(el.scrollHeight / targetLH);
+          // Return as a float; the search compares against a tolerance so we
+          // do not lose the last 1-2 % of achievable font size to Math.ceil.
+          return el.scrollHeight / targetLH;
         };
-        let lo = MIN_FONT, hi = MAX_FONT, best = MIN_FONT;
-        for (let i = 0; i < 22; i++) {
+        // Upper bound scales with THIS card's line-height so both the
+        // small on-screen card and the huge 9:16 export card find their
+        // own optimal font size. Hard 200px ceiling is a safety valve.
+        const maxForThisCard = Math.min(MAX_FONT_HARD, targetLH * FONT_TO_LINE_RATIO);
+        let lo = MIN_FONT, hi = maxForThisCard, best = MIN_FONT;
+        for (let i = 0; i < 24; i++) {
           const mid = (lo + hi) / 2;
-          if (measure(mid) > TARGET_LINES) hi = mid;
+          if (measure(mid) > TARGET_LINES + LINE_TOLERANCE) hi = mid;
           else { lo = mid; best = mid; }
           if (hi - lo < 0.15) break;
         }
@@ -135,9 +143,17 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
           pixelRatio: pending.pr,
           cacheBust: true,
           backgroundColor: undefined,
-          width: el.offsetWidth,
-          height: el.offsetHeight,
+          width: pending.w,
+          height: pending.h,
+          style: { opacity: "1" },
         });
+        if (url.length < 5000) {
+          console.warn(
+            "[export] PNG looks empty (data-url length =",
+            url.length,
+            "). Check the off-screen export wrapper."
+          );
+        }
         if (cancelled) return;
         const a = document.createElement("a");
         a.download = `quran-${pending.name}-page-${pageNumber}.png`;
@@ -237,13 +253,33 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
         </article>
       </div>
       {pending && (
-        <div ref={exportRef} style={{ position: "fixed", left: -30000, top: 0, pointerEvents: "none" }}>
-          <MushafPage
-            verses={verses}
-            pageNumber={pageNumber}
-            exportSize={{ w: pending.w, h: pending.h }}
-            onReady={() => setExportReady(true)}
-          />
+        <div
+          aria-hidden
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            transform: "translate(-200vw, 0)",
+            pointerEvents: "none",
+            zIndex: -1,
+          }}
+        >
+          <div
+            ref={exportRef}
+            style={{
+              position: "relative",
+              top: 0,
+              left: 0,
+              pointerEvents: "none",
+            }}
+          >
+            <MushafPage
+              verses={verses}
+              pageNumber={pageNumber}
+              exportSize={{ w: pending.w, h: pending.h }}
+              onReady={() => setExportReady(true)}
+            />
+          </div>
         </div>
       )}
     </>
