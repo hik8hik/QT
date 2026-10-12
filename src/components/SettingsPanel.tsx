@@ -123,6 +123,10 @@ export default function SettingsPanel({ onClose }: { onClose?: () => void }) {
             options={["scroll", "page", "mushaf"] as const}
             onChange={setViewMode} />
         </Row>
+        <Row label="Page flip animation" hint="Animate Mushaf page changes (respects prefers-reduced-motion)">
+          <Toggle on={settings.pageAnimation}
+            onChange={(v) => update({ pageAnimation: v })} />
+        </Row>
         <Row label="Smooth scrolling">
           <Toggle on={settings.smoothScroll}
             onChange={(v) => update({ smoothScroll: v })} />
