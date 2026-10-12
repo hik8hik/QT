@@ -7,19 +7,17 @@ import ExportButton from "./ExportButton";
 
 interface Verse { id: number; verse_key: string; text_uthmani_tajweed: string; }
 interface ExportSize { w: number; h: number; }
-
 interface Props {
   verses: Verse[];
   pageNumber: number;
-  /** When set, this instance is rendered at exactly {w} × {h} for export. */
   exportSize?: ExportSize;
-  /** Called once auto-fit completes. */
   onReady?: () => void;
 }
 
 const TARGET_LINES = 15;
 const MIN_FONT = 8;
 const MAX_FONT = 34;
+const CARD_ASPECT = 3 / 4.3;
 
 function sanitise(raw: string): string {
   return raw
@@ -46,9 +44,7 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
       const sNum = parseInt(surah, 10);
       const showBism = isFirst && sNum !== 1 && sNum !== 9;
       if (isFirst) {
-        pieces.push(
-          `<div class="mushaf-surah-header"><span class="mushaf-surah-name">سورة ${sNum}</span></div>`
-        );
+        pieces.push(`<div class="mushaf-surah-header"><span class="mushaf-surah-name">سورة ${sNum}</span></div>`);
         if (showBism) {
           pieces.push(`<div class="mushaf-bismillah">بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ</div>`);
         }
@@ -58,23 +54,9 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
     return pieces.join(" ");
   }, [verses]);
 
-  /* ── Auto-fit ──────────────────────────────────────
-   * Algorithm:
-   *   1. The page body has a fixed available height H (clientHeight minus
-   *      padding).
-   *   2. We want the text to occupy EXACTLY 15 lines, filling H fully.
-   *      So the line-height for a perfect fit is H / 15.
-   *   3. We binary-search the largest font size at which the wrapped text
-   *      still needs ≤ 15 lines at that fixed line-height.
-   *   4. The line-height never changes after step 2, so wrapping is stable
-   *      during the search (wrapping depends on container width and word
-   *      widths, not on line-height).
-   * Result: the text block fills the body exactly, top to bottom.
-   */
   useEffect(() => {
     let cancelled = false;
     let running = false;
-
     const fit = async () => {
       if (running) return;
       running = true;
@@ -86,31 +68,24 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
           try { await document.fonts.ready; } catch {}
         }
         if (cancelled) return;
-
         const cs = getComputedStyle(body);
         const padTop = parseFloat(cs.paddingTop) || 0;
         const padBot = parseFloat(cs.paddingBottom) || 0;
         const avail = Math.max(80, body.clientHeight - padTop - padBot);
         const targetLH = avail / TARGET_LINES;
-
         const measure = (px: number): number => {
           el.style.fontSize = px + "px";
           el.style.lineHeight = targetLH + "px";
           void el.offsetHeight;
           return Math.ceil(el.scrollHeight / targetLH);
         };
-
         let lo = MIN_FONT, hi = MAX_FONT, best = MIN_FONT;
         for (let i = 0; i < 22; i++) {
           const mid = (lo + hi) / 2;
-          if (measure(mid) > TARGET_LINES) {
-            hi = mid;
-          } else {
-            lo = mid; best = mid;
-          }
+          if (measure(mid) > TARGET_LINES) hi = mid;
+          else { lo = mid; best = mid; }
           if (hi - lo < 0.15) break;
         }
-        // Final pin — leave DOM at best values.
         el.style.fontSize = best + "px";
         el.style.lineHeight = targetLH + "px";
         if (!cancelled) {
@@ -120,27 +95,16 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
         }
       } finally { running = false; }
     };
-
     fit();
-
     const body = bodyRef.current;
     if (!body) return () => { cancelled = true; };
     const ro = new ResizeObserver(() => { if (!cancelled) fit(); });
     ro.observe(body);
     return () => { cancelled = true; ro.disconnect(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    html,
-    settings.fontFamily,
-    settings.fontWeight,
-    settings.showTajweedColors,
-    settings.showVerseNumbers,
-    settings.strokeEnabled,
-    settings.strokeWidth,
-    settings.strokeColor,
-    exportSize?.w,
-    exportSize?.h,
-  ]);
+  }, [html, settings.fontFamily, settings.fontWeight, settings.showTajweedColors,
+      settings.showVerseNumbers, settings.strokeEnabled, settings.strokeWidth,
+      settings.strokeColor, exportSize?.w, exportSize?.h]);
 
   const surahs = useMemo(() => {
     const s = new Set<string>();
@@ -148,140 +112,137 @@ export default function MushafPage({ verses, pageNumber, exportSize, onReady }: 
     return Array.from(s).sort((a, b) => parseInt(a) - parseInt(b));
   }, [verses]);
 
-  /* ── 9:16 export flow ───────────────────────────────── */
-  const [pending, setPending] = useState<null | { w:number; h:number; pr:number; name:string }>(null);
+  const [pending, setPending] = useState<null | { w: number; h: number; pr: number; name: string }>(null);
+  const [exportReady, setExportReady] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
   const runExport = useCallback((w: number, h: number, pr: number, name: string) => {
+    setExportReady(false);
     setPending({ w, h, pr, name });
   }, []);
 
   useEffect(() => {
-    if (!pending) return;
-    const t = window.setTimeout(async () => {
-      const el = exportRef.current;
-      if (!el) { setPending(null); return; }
+    if (!pending || !exportReady) return;
+    const el = exportRef.current;
+    if (!el) return;
+    let cancelled = false;
+    (async () => {
       try {
         if (document.fonts && document.fonts.ready) await document.fonts.ready;
-        // Small extra delay so the auto-fit inside the export instance settles.
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 140));
+        if (cancelled) return;
         const url = await toPng(el, {
           pixelRatio: pending.pr,
           cacheBust: true,
           backgroundColor: undefined,
           width: el.offsetWidth,
           height: el.offsetHeight,
-          filter: (n) => !(n instanceof HTMLElement && "exportHide" in n.dataset),
         });
+        if (cancelled) return;
         const a = document.createElement("a");
         a.download = `quran-${pending.name}-page-${pageNumber}.png`;
         a.href = url; a.click();
       } catch (e) {
         console.error(e);
-        alert("Export failed — see console.");
+        alert("Export failed - see console.");
       } finally {
-        setPending(null);
+        if (!cancelled) { setPending(null); setExportReady(false); }
       }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [pending, pageNumber]);
+    })();
+    return () => { cancelled = true; };
+  }, [pending, exportReady, pageNumber]);
 
   if (!verses?.length) {
     return <div className="error-card"><h2>No verses found</h2></div>;
   }
 
-  /* ── Export instance rendering (hidden, off-screen) ── */
   if (exportSize) {
+    const cw = exportSize.w;
+    const ch = exportSize.h;
+    const padX = Math.round(cw * 0.075);
+    const padY = Math.round(ch * 0.075);
+    const availW = cw - padX * 2;
+    const availH = ch - padY * 2;
+    let cardW = availW;
+    let cardH = Math.round(cardW / CARD_ASPECT);
+    if (cardH > availH) {
+      cardH = availH;
+      cardW = Math.round(cardH * CARD_ASPECT);
+    }
+    const radius = Math.round(cardW * 0.055);
+    const padTop = Math.round(cardH * 0.045);
+    const padSide = Math.round(cardW * 0.05);
+    const padBot = Math.round(cardH * 0.035);
     return (
-      <article
-        className="mushaf-page"
-        lang="ar"
-        style={{
-          width: exportSize.w + "px",
-          height: exportSize.h + "px",
-          aspectRatio: "auto",
-          borderRadius: "48px",
-          padding: "5% 5% 3.5%",
-          maxWidth: "none",
-          maxHeight: "none",
-        }}
-      >
-        <div className="mushaf-page-number" data-export-hide>{pageNumber}</div>
-        <header className="mushaf-page-header">
-          <span>Mushaf · page {pageNumber}</span>
-          <span>Surah {surahs.join(" · ")}</span>
-        </header>
-        <div className="mushaf-page-body" ref={bodyRef}>
-          <div
-            ref={textRef}
-            className="mushaf-text quran-text"
-            style={{ fontSize: fontSize + "px", lineHeight: lineHeight + "px" }}
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        </div>
-        <footer className="mushaf-page-footer"><span>{pageNumber}</span></footer>
-      </article>
+      <div style={{
+        width: cw, height: ch,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "transparent",
+      }}>
+        <article
+          className="mushaf-page"
+          lang="ar"
+          style={{
+            width: cardW,
+            height: cardH,
+            aspectRatio: "auto",
+            maxWidth: "none",
+            maxHeight: "none",
+            borderRadius: radius + "px",
+            padding: `${padTop}px ${padSide}px ${padBot}px`,
+            overflow: "visible",
+          }}
+        >
+          <div className="mushaf-page-number">{pageNumber}</div>
+          <header className="mushaf-page-header">
+            <span>Mushaf - page {pageNumber}</span>
+            <span>Surah {surahs.join(" - ")}</span>
+          </header>
+          <div className="mushaf-page-body" ref={bodyRef}>
+            <div ref={textRef} className="mushaf-text quran-text"
+              style={{ fontSize: fontSize + "px", lineHeight: lineHeight + "px" }}
+              dangerouslySetInnerHTML={{ __html: html }} />
+          </div>
+          <footer className="mushaf-page-footer"><span>{pageNumber}</span></footer>
+        </article>
+      </div>
     );
   }
 
-  /* ── Visible instance ── */
   return (
     <>
       <div className="mushaf-stage">
         <article className="mushaf-page" lang="ar" ref={ref}>
-          <div className="mushaf-page-number" data-export-hide>{pageNumber}</div>
-
+          <div className="mushaf-page-number">{pageNumber}</div>
           <header className="mushaf-page-header">
-            <span>Mushaf · page {pageNumber}</span>
-            <span>Surah {surahs.join(" · ")}</span>
+            <span>Mushaf - page {pageNumber}</span>
+            <span>Surah {surahs.join(" - ")}</span>
           </header>
-
           <div className="mushaf-page-body" ref={bodyRef}>
-            <div
-              ref={textRef}
-              className="mushaf-text quran-text"
+            <div ref={textRef} className="mushaf-text quran-text"
               style={{ fontSize: fontSize + "px", lineHeight: lineHeight + "px" }}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
+              dangerouslySetInnerHTML={{ __html: html }} />
           </div>
-
           <footer className="mushaf-page-footer"><span>{pageNumber}</span></footer>
-
           <div className="mushaf-export-group" data-export-hide>
-            <ExportButton targetRef={ref} filename={`quran-page-${pageNumber}-4x`}
-              scale={4} variant="inline" label="4×" />
-            <ExportButton targetRef={ref} filename={`quran-page-${pageNumber}-8x`}
-              scale={8} variant="inline" label="8×" />
+            <ExportButton targetRef={ref} filename={`quran-page-${pageNumber}-4x`} scale={4} variant="inline" label="4x" />
+            <ExportButton targetRef={ref} filename={`quran-page-${pageNumber}-8x`} scale={8} variant="inline" label="8x" />
             <button type="button" className="icon-btn export-btn-inline"
-              data-export-hide title="Export 4K portrait 9:16"
-              onClick={() => runExport(1080, 1920, 2, "4k-9x16")}>
-              4K<br/>9:16
-            </button>
+              title="Export 4K portrait 9:16 (2160x3840)"
+              onClick={() => runExport(1080, 1920, 2, "4k-9x16")}>4K 9:16</button>
             <button type="button" className="icon-btn export-btn-inline"
-              data-export-hide title="Export 8K portrait 9:16"
-              onClick={() => runExport(1080, 1920, 4, "8k-9x16")}>
-              8K<br/>9:16
-            </button>
+              title="Export 8K portrait 9:16 (4320x7680)"
+              onClick={() => runExport(1080, 1920, 4, "8k-9x16")}>8K 9:16</button>
           </div>
         </article>
       </div>
-
       {pending && (
-        <div
-          ref={exportRef}
-          style={{
-            position: "fixed",
-            left: -100000,
-            top: 0,
-            padding: "32px",
-            pointerEvents: "none",
-            background: "transparent",
-          }}
-        >
+        <div ref={exportRef} style={{ position: "fixed", left: -30000, top: 0, pointerEvents: "none" }}>
           <MushafPage
             verses={verses}
             pageNumber={pageNumber}
             exportSize={{ w: pending.w, h: pending.h }}
+            onReady={() => setExportReady(true)}
           />
         </div>
       )}
