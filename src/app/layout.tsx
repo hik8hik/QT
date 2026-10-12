@@ -27,6 +27,7 @@ const THEME_BOOT = `
     if (s.smoothScroll !== undefined) r.setAttribute("data-smooth-scroll", s.smoothScroll ? "on" : "off");
     if (s.showTajweedColors !== undefined) r.setAttribute("data-tajweed-colors", s.showTajweedColors ? "on" : "off");
     if (s.showVerseNumbers !== undefined) r.setAttribute("data-verse-numbers", s.showVerseNumbers ? "on" : "off");
+    if (s.pageAnimation !== undefined) r.setAttribute("data-page-animation", s.pageAnimation ? "on" : "off");
     if (s.fontSize) r.style.setProperty("--quran-font-size", s.fontSize + "rem");
     if (s.lineHeight) r.style.setProperty("--quran-line-height", String(s.lineHeight));
     if (s.fontFamily) {
