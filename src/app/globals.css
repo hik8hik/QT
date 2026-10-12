@@ -527,6 +527,22 @@ background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000
 background-repeat:no-repeat;background-position:right .7rem center;
 }
 
+/* Page flip animation (Mushaf) */
+@keyframes pageFlipIn {
+  0% { opacity:0; transform: perspective(1400px) rotateY(-16deg) translateX(28px) scale(.985); }
+  55% { opacity:1; }
+  100% { opacity:1; transform: perspective(1400px) rotateY(0deg) translateX(0) scale(1); }
+}
+html[data-page-animation="on"] .mushaf-stage > .mushaf-page {
+  transform-origin: right center;
+  backface-visibility: hidden;
+  animation: pageFlipIn .55s cubic-bezier(.2,.9,.3,1) both;
+}
+html[data-page-animation="off"] .mushaf-stage > .mushaf-page { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-page-animation="on"] .mushaf-stage > .mushaf-page { animation: none; }
+}
+
 @media(max-width:600px){
 .page-wrapper{padding:1rem 1rem 4rem}
 .header{padding:.7rem .9rem;border-radius:18px;gap:.4rem}
