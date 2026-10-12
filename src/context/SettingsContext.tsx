@@ -19,6 +19,7 @@ export interface Settings {
   fontWeight: FontWeight;
   showTajweedColors: boolean;
   showVerseNumbers: boolean;
+  pageAnimation: boolean;
   /* Stroke (outline) */
   strokeWidth: number;   // px
   strokeColor: string;   // hex
@@ -30,7 +31,7 @@ export const DEFAULTS: Settings = {
   smoothScroll: true, autoScroll: false, autoScrollSpeed: 40,
   fontSize: 1.75, lineHeight: 2.4,
   fontFamily: "uthmanic", fontWeight: "regular",
-  showTajweedColors: true, showVerseNumbers: true,
+  showTajweedColors: true, showVerseNumbers: true, pageAnimation: true,
   strokeWidth: 0, strokeColor: "#000000", strokeEnabled: false,
 };
 
@@ -69,6 +70,7 @@ function applyToRoot(s: Settings) {
   r.setAttribute("data-smooth-scroll", s.smoothScroll ? "on" : "off");
   r.setAttribute("data-tajweed-colors", s.showTajweedColors ? "on" : "off");
   r.setAttribute("data-verse-numbers", s.showVerseNumbers ? "on" : "off");
+  r.setAttribute("data-page-animation", s.pageAnimation ? "on" : "off");
   r.style.setProperty("--quran-font-size", s.fontSize + "rem");
   r.style.setProperty("--quran-line-height", String(s.lineHeight));
   r.style.setProperty("--quran-font-family", FONT_MAP[s.fontFamily]);
